@@ -90,16 +90,29 @@ ncd() {
 }
 # <<< nav ncd <<<'
 
+# bash 登录 shell 兼容：SSH 登录时读 .bash_profile/.profile 而非 .bashrc。
+# 若登录文件未加载 .bashrc，追加一行（带 BASH_VERSION 保护，非 bash 下无害）。
+bash_login_compat() {
+  login_rc=""
+  [ -f "$HOME/.bash_profile" ] && login_rc="$HOME/.bash_profile"
+  [ -z "$login_rc" ] && [ -f "$HOME/.profile" ] && login_rc="$HOME/.profile"
+  [ -z "$login_rc" ] && login_rc="$HOME/.bash_profile"
+  if ! grep -q "\.bashrc" "$login_rc" 2>/dev/null; then
+    printf '\n[ -n "$BASH_VERSION" ] && . "$HOME/.bashrc"\n' >> "$login_rc"
+    echo "已把 .bashrc 加载加入 ${login_rc}（登录 shell 兼容）"
+  fi
+}
+
 setup_ncd() {
   [ "${NAV_NO_NCD:-0}" = "1" ] && return
   shell="${SHELL:-}"
   rc=""
   case "$shell" in
     *zsh*) rc="$HOME/.zshrc" ;;
-    *bash*) rc="$HOME/.bashrc" ;;
+    *bash*) rc="$HOME/.bashrc"; bash_login_compat ;;
     "")
       if [ -f "$HOME/.zshrc" ]; then rc="$HOME/.zshrc"
-      elif [ -f "$HOME/.bashrc" ]; then rc="$HOME/.bashrc"
+      elif [ -f "$HOME/.bashrc" ]; then rc="$HOME/.bashrc"; bash_login_compat
       else
         echo "无法检测 shell，请手动配置 ncd（见 README）"
         return
