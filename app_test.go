@@ -234,6 +234,48 @@ func TestFormatPathHomeAbbrev(t *testing.T) {
 	}
 }
 
+func TestBackRemembersPosition(t *testing.T) {
+	dir := t.TempDir()
+	os.Mkdir(filepath.Join(dir, "sub"), 0o755)
+	os.Mkdir(filepath.Join(dir, "other"), 0o755)
+	app := &App{cwd: dir}
+	app.load()
+	// 目录排序: other, sub → 光标移到 sub（index 1）后进入
+	app.cursor = 1
+	app.handleKey("right")
+	if app.cwd != filepath.Join(dir, "sub") {
+		t.Fatalf("enter: cwd=%s", app.cwd)
+	}
+	app.handleKey("h")
+	if app.cwd != dir {
+		t.Fatalf("back: cwd=%s", app.cwd)
+	}
+	if app.cursor != 1 {
+		t.Fatalf("光标应恢复到 1（sub），got %d", app.cursor)
+	}
+	// 再 h：历史栈空 → 回父目录
+	app.handleKey("h")
+	if app.cwd != filepath.Dir(dir) {
+		t.Fatalf("empty-stack back: cwd=%s", app.cwd)
+	}
+}
+
+func TestBackRestoresAfterMultiLevel(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a")
+	os.Mkdir(a, 0o755)
+	os.Mkdir(filepath.Join(a, "b"), 0o755)
+	app := &App{cwd: dir}
+	app.load()
+	app.handleKey("right") // a
+	app.handleKey("right") // a/b
+	app.handleKey("h")     // a
+	app.handleKey("h")     // dir
+	if app.cwd != dir {
+		t.Fatalf("cwd=%s", app.cwd)
+	}
+}
+
 func TestEnterDirChangesCwd(t *testing.T) {
 	dir := t.TempDir()
 	os.Mkdir(filepath.Join(dir, "sub"), 0o755)

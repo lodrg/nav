@@ -16,6 +16,12 @@ const (
 	footerPrint  = "↑↓/jk 移动 · →/l 深入 · ⏎ 选中 · p/q 输出 · h/← 上级 · Esc 退出"
 )
 
+type historyEntry struct {
+	cwd    string
+	cursor int
+	top    int
+}
+
 type App struct {
 	cwd        string
 	printMode  bool
@@ -31,6 +37,18 @@ type App struct {
 	selected   string
 	oldState   any
 	fd         int
+	hist       []historyEntry // 浏览历史栈：进入目录前的位置，h/← 返回时恢复
+}
+
+// enterDir 进入目录：先记住当前位置（返回时可恢复），再切换并从头浏览。
+func (a *App) enterDir(full string) {
+	a.hist = append(a.hist, historyEntry{a.cwd, a.cursor, a.top})
+	if len(a.hist) > 100 {
+		a.hist = a.hist[1:] // 限制栈深
+	}
+	a.cwd = full
+	a.load()
+	a.cursor, a.top = 0, 0
 }
 
 func (a *App) load() {
@@ -165,9 +183,7 @@ func (a *App) openEntry(idx int, method string) bool {
 			openDefault(full)
 			return true
 		}
-		a.cwd = full
-		a.load()
-		a.cursor, a.top = 0, 0
+		a.enterDir(full)
 		return false
 	}
 	if (method == "auto" || method == "editor") && (e.Kind == "text" || method == "editor") {
@@ -238,11 +254,20 @@ func (a *App) handleKey(key string) string {
 		a.previewOn = false
 		return "redraw"
 	case "left", "h":
-		parent := filepath.Dir(a.cwd)
-		if parent != a.cwd {
-			a.cwd = parent
+		if len(a.hist) > 0 {
+			// 弹出栈顶：恢复到进入当前目录前的位置（记住上级的光标）
+			h := a.hist[len(a.hist)-1]
+			a.hist = a.hist[:len(a.hist)-1]
+			a.cwd = h.cwd
+			a.cursor, a.top = h.cursor, h.top
 			a.load()
-			a.cursor, a.top = 0, 0
+		} else {
+			parent := filepath.Dir(a.cwd)
+			if parent != a.cwd {
+				a.cwd = parent
+				a.load()
+				a.cursor, a.top = 0, 0
+			}
 		}
 		a.previewOn = false
 		return "redraw"
@@ -253,9 +278,7 @@ func (a *App) handleKey(key string) string {
 		if a.printMode {
 			// --print 模式：→ 只负责深入目录（⏎ 才是选中）
 			if a.entries[a.cursor].IsDir {
-				a.cwd = filepath.Join(a.cwd, a.entries[a.cursor].Name)
-				a.load()
-				a.cursor, a.top = 0, 0
+				a.enterDir(filepath.Join(a.cwd, a.entries[a.cursor].Name))
 			}
 			return "redraw"
 		}
