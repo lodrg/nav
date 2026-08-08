@@ -1,0 +1,36 @@
+//go:build linux
+
+package main
+
+import "golang.org/x/sys/unix"
+
+// makeCbreak 进入 cbreak 模式：清 ICANON|ECHO，保留 ISIG（Ctrl+C 仍是 SIGINT）
+// 和 OPOST（\n 正常换行）。返回旧状态用于恢复。
+func makeCbreak(fd int) (*unix.Termios, error) {
+	old, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	if err != nil {
+		return nil, err
+	}
+	t := *old
+	t.Lflag &^= unix.ICANON | unix.ECHO
+	t.Cc[unix.VMIN] = 1
+	t.Cc[unix.VTIME] = 0
+	if err := unix.IoctlSetTermios(fd, unix.TCSETS, &t); err != nil {
+		return nil, err
+	}
+	return old, nil
+}
+
+func restoreTerm(fd int, old any) {
+	if t, ok := old.(*unix.Termios); ok {
+		_ = unix.IoctlSetTermios(fd, unix.TCSETS, t)
+	}
+}
+
+func termSize(fd int) (int, int) {
+	ws, err := unix.IoctlGetWinsize(fd, unix.TIOCGWINSZ)
+	if err != nil || ws.Col == 0 || ws.Row == 0 {
+		return 80, 24
+	}
+	return int(ws.Col), int(ws.Row)
+}
