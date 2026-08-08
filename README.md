@@ -33,7 +33,16 @@ irm https://github.com/lodrg/nav/releases/latest/download/install.ps1 | iex
 NAV_LOCAL=1 ./install.sh
 ```
 
-安装脚本自动检测系统（darwin/linux × amd64/arm64）下载对应二进制到 `~/.local/bin`（Windows 为 `%LOCALAPPDATA%\bin`）。可覆盖：`NAV_URL=<前缀>` 换下载源，`NAV_DEST=<目录>` 换安装位置。Release 附 `SHA256SUMS` 校验文件。
+安装脚本自动检测系统（darwin/linux × amd64/arm64）下载对应二进制到 `~/.local/bin`（Windows 为 `%LOCALAPPDATA%\bin`），**并自动把 `ncd` 函数写入你的 shell 配置**（zsh → `~/.zshrc`，bash → `~/.bashrc`，PowerShell → `$PROFILE`），新开终端即可用。可覆盖：`NAV_URL=<前缀>` 换下载源，`NAV_DEST=<目录>` 换安装位置，`NAV_NO_NCD=1` 跳过函数配置，`NAV_UNINSTALL=1` 一键卸载。Release 附 `SHA256SUMS` 校验文件。
+
+### ncd 与 nav 的区别（Linux 上注意）
+
+| 命令 | 模式 | `⏎` 回车 | `→` 右键 |
+|---|---|---|---|
+| `nav` | 普通（浏览/打开文件） | 打开文件/进入目录 | 同左 |
+| `ncd` | print（导航定位） | **选中当前项**，输出路径 → shell cd 过去 | 只深入目录 |
+
+要用"回车定位到文件夹"的体验，请用 **`ncd`**（安装时已自动配置）。
 
 安装后建议配置 shell 函数（目录跳转）：
 
