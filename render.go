@@ -62,6 +62,37 @@ func dispWidth(s string) int {
 	return w
 }
 
+// runeWidth：单字符宽度（路径截断用）。ZWJ/VS16 零宽，W/F 宽字符 2 列。
+func runeWidth(r rune) int {
+	switch r {
+	case 0x200D, 0xFE0F:
+		return 0
+	}
+	if isWideRune(r) {
+		return 2
+	}
+	return 1
+}
+
+// truncateTail：超宽时保留尾部（最近路径段最重要），头部省略号。
+func truncateTail(s string, w int) string {
+	if dispWidth(s) <= w {
+		return s
+	}
+	runes := []rune(s)
+	keep := 0
+	cw := 0
+	for i := len(runes) - 1; i >= 0; i-- {
+		rw := runeWidth(runes[i])
+		if cw+rw > w-1 {
+			break
+		}
+		keep++
+		cw += rw
+	}
+	return "…" + string(runes[len(runes)-keep:])
+}
+
 // truncate 宽度感知截断：不撕裂 CJK，超宽补 …。
 func truncate(s string, w int) string {
 	if dispWidth(s) <= w {

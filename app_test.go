@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -180,6 +181,56 @@ func TestPreviewNonTextNotice(t *testing.T) {
 	app.handleKey(" ")
 	if !app.previewOn {
 		t.Fatal("preview should show notice for non-text")
+	}
+}
+
+func TestHjklNavigation(t *testing.T) {
+	app := testApp(t, "/tmp", false, false)
+	// j = down, k = up
+	app.handleKey("j")
+	if app.cursor != 1 {
+		t.Fatalf("j: cursor=%d, want 1", app.cursor)
+	}
+	app.handleKey("j")
+	if app.cursor != 2 {
+		t.Fatalf("j: cursor=%d, want 2", app.cursor)
+	}
+	app.handleKey("k")
+	if app.cursor != 1 {
+		t.Fatalf("k: cursor=%d, want 1", app.cursor)
+	}
+}
+
+func TestHjklLeftRight(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "sub")
+	os.Mkdir(sub, 0o755)
+	// l = right（进入目录）
+	app := &App{cwd: dir, printMode: true}
+	app.load()
+	app.cursor = 0 // sub
+	if got := app.handleKey("l"); got != "redraw" {
+		t.Fatalf("l: action=%s", got)
+	}
+	if app.cwd != sub {
+		t.Fatalf("l should enter dir, cwd=%s", app.cwd)
+	}
+	// h = left（返回上级）
+	app.handleKey("h")
+	if app.cwd != dir {
+		t.Fatalf("h should go parent, cwd=%s", app.cwd)
+	}
+}
+
+func TestFormatPathHomeAbbrev(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	app := &App{cwd: home, entries: []Entry{{Name: "x"}}}
+	line := app.formatPath(100)
+	if !strings.Contains(line, "~") {
+		t.Fatalf("home should abbreviate to ~: %q", line)
+	}
+	if !strings.Contains(line, "1 项") {
+		t.Fatalf("should show entry count: %q", line)
 	}
 }
 

@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	footerNormal = "↑↓ 移动 · →/⏎ 打开 · ← 上级 · e 编辑器 · a 默认应用 · 空格 预览 · q 退出"
-	footerPrint  = "↑↓ 移动 · → 深入 · ⏎ 选中输出 · p/q 输出当前目录 · Esc 退出"
+	footerNormal = "↑↓/jk 移动 · →/l 进入 · ←/h 上级 · e 编辑 · a 应用 · 空格 预览 · q 退出"
+	footerPrint  = "↑↓/jk 移动 · →/l 深入 · ⏎ 选中 · p/q 输出 · h/← 上级 · Esc 退出"
 )
 
 type App struct {
@@ -69,12 +69,32 @@ func (a *App) loadPreview(e Entry) {
 	a.previewOn = true
 }
 
+// formatPath：弹层顶部当前目录行（加粗 + 📂，HOME 缩写为 ~，超宽保留尾部）。
+func (a *App) formatPath(width int) string {
+	p := a.cwd
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		switch {
+		case p == home:
+			p = "~"
+		case strings.HasPrefix(p, home+string(os.PathSeparator)):
+			p = "~" + p[len(home):]
+		}
+	}
+	// 宽度预算：图标(2) + 空格(1) + 条目数后缀
+	suffix := fmt.Sprintf(" (%d 项)", len(a.entries))
+	avail := width - 4 - dispWidth(suffix)
+	if avail < 8 {
+		avail = 8
+	}
+	return "\x1b[1m" + "📂 " + truncateTail(p, avail) + "\x1b[0m" + dim + suffix + reset
+}
+
 func (a *App) draw(first bool) {
 	width, termH := termSize(a.fd)
-	maxH := max(3, termH-2) // 弹层最多占 termH-2 行，给提示符留位
+	maxH := max(4, termH-2) // 弹层最多占 termH-2 行（路径行 + 内容 + footer）
 	n := len(a.entries)
 
-	var body []string
+	body := []string{a.formatPath(width)} // 第 0 行：当前目录
 	hl := -1
 	if a.previewOn {
 		for _, ln := range a.preview {
@@ -85,9 +105,9 @@ func (a *App) draw(first bool) {
 		if a.err != nil {
 			msg = a.err.Error()
 		}
-		body = []string{red + truncate(msg, width) + reset}
+		body = append(body, red+truncate(msg, width)+reset)
 	} else {
-		entryVis := min(n, maxH-1) // 最后一行留给 footer
+		entryVis := min(n, maxH-2) // 路径行 + footer 占两行
 		a.top = min(a.top, a.cursor)
 		if a.cursor >= a.top+entryVis {
 			a.top = a.cursor - entryVis + 1
@@ -96,7 +116,7 @@ func (a *App) draw(first bool) {
 		for i := a.top; i < a.top+entryVis; i++ {
 			body = append(body, formatRow(a.entries[i], width))
 		}
-		hl = a.cursor - a.top
+		hl = 1 + a.cursor - a.top // 路径行占 index 0
 	}
 
 	ftr := footerNormal
@@ -205,19 +225,19 @@ func (a *App) handleKey(key string) string {
 	switch key {
 	case "q", "esc", "ctrl-c":
 		return "quit"
-	case "up":
+	case "up", "k":
 		if n > 0 {
 			a.cursor = (a.cursor - 1 + n) % n
 		}
 		a.previewOn = false
 		return "redraw"
-	case "down":
+	case "down", "j":
 		if n > 0 {
 			a.cursor = (a.cursor + 1) % n
 		}
 		a.previewOn = false
 		return "redraw"
-	case "left":
+	case "left", "h":
 		parent := filepath.Dir(a.cwd)
 		if parent != a.cwd {
 			a.cwd = parent
@@ -226,7 +246,7 @@ func (a *App) handleKey(key string) string {
 		}
 		a.previewOn = false
 		return "redraw"
-	case "right":
+	case "right", "l":
 		if n == 0 {
 			return "redraw"
 		}

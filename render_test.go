@@ -100,6 +100,31 @@ func TestRenderRegionFewerLinesThanHeight(t *testing.T) {
 	}
 }
 
+func TestTruncateTailKeepsTail(t *testing.T) {
+	got := truncateTail("/very/long/中文/路径/to/nav-go", 16)
+	if !strings.HasSuffix(got, "nav-go") {
+		t.Fatalf("should keep tail, got %q", got)
+	}
+	if !strings.HasPrefix(got, "…") {
+		t.Fatalf("should prefix ellipsis, got %q", got)
+	}
+	if dispWidth(got) > 16 {
+		t.Fatalf("width %d > 16", dispWidth(got))
+	}
+}
+
+func TestTruncateTailFits(t *testing.T) {
+	if got := truncateTail("/short", 20); got != "/short" {
+		t.Fatalf("want /short, got %q", got)
+	}
+}
+
+func TestRuneWidth(t *testing.T) {
+	if runeWidth('中') != 2 || runeWidth('a') != 1 || runeWidth(0xFE0F) != 0 {
+		t.Fatal("runeWidth basic cases wrong")
+	}
+}
+
 func TestFormatRowWidthRespected(t *testing.T) {
 	row := formatRow(Entry{
 		Name: "很长的中文文件名.txt", Kind: "text",
