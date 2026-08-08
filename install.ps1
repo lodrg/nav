@@ -27,11 +27,12 @@ $markerEnd = "# <<< nav ncd <<<"
 if ((Get-Content $profilePath -Raw) -notlike "*$markerStart*") {
   $func = @'
 # >>> nav ncd >>>
-# ncd: 用 nav 导航并 cd（⏎ 选中目录→切过去；→ 深入；q 停在当前目录）
+# ncd: 用 nav 导航——⏎ 选中目录→切过去；选中文件→默认应用打开；→ 深入；q 停在当前目录
 function ncd {
   $d = nav --print @args
-  if ($LASTEXITCODE -eq 0 -and $d -and (Test-Path $d -PathType Container)) {
-    Set-Location $d
+  if ($LASTEXITCODE -eq 0 -and $d) {
+    if (Test-Path $d -PathType Container) { Set-Location $d }
+    else { Invoke-Item $d }
   }
 }
 # <<< nav ncd <<<

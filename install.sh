@@ -29,15 +29,23 @@ detect
 
 DEST="${NAV_DEST:-$HOME/.local/bin}"
 
+# remove_ncd：从 rc 文件删除 ncd 函数（marker 区间）。须在 uninstall 之前定义。
+remove_ncd() {
+  rc="$1"
+  if grep -qF "# >>> nav ncd >>>" "$rc"; then
+    if [ "$(uname)" = "Darwin" ]; then
+      sed -i.bak "/# >>> nav ncd >>>/,/# <<< nav ncd <<</d" "$rc" && rm -f "$rc.bak"
+    else
+      sed -i "/# >>> nav ncd >>>/,/# <<< nav ncd <<</d" "$rc"
+    fi
+  fi
+}
+
 uninstall() {
   for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     [ -f "$rc" ] || continue
     if grep -qF "# >>> nav ncd >>>" "$rc"; then
-      if [ "$(uname)" = "Darwin" ]; then
-        sed -i.bak "/# >>> nav ncd >>>/,/# <<< nav ncd <<</d" "$rc" && rm -f "$rc.bak"
-      else
-        sed -i "/# >>> nav ncd >>>/,/# <<< nav ncd <<</d" "$rc"
-      fi
+      remove_ncd "$rc"
       echo "已从 $rc 移除 ncd 函数"
     fi
   done
@@ -75,14 +83,19 @@ case ":$PATH:" in
 esac
 
 # ---- ncd 函数自动配置（zsh/bash，marker 标记可卸载） ----
+# 智能分发：⏎ 选中目录 → cd 过去；选中文件 → 默认应用打开
 NCD_FUNC='# >>> nav ncd >>>
-# ncd: 用 nav 导航并 cd（⏎ 选中当前项→cd 过去；→ 深入；q 停在当前目录）
+# ncd: 用 nav 导航——⏎ 选中目录→cd 过去；选中文件→默认应用打开；→ 深入；q 停在当前目录
 ncd() {
   local d
   d="$(command nav --print "$@")" || return $?
   if [[ -n "$d" ]]; then
     if [[ -d "$d" ]]; then
       builtin cd "$d"
+    elif command -v open >/dev/null 2>&1; then
+      command open "$d"
+    elif command -v xdg-open >/dev/null 2>&1; then
+      command xdg-open "$d" >/dev/null 2>&1 &
     else
       printf '\''%s\n'\'' "$d"
     fi
@@ -124,7 +137,10 @@ setup_ncd() {
 
   [ -f "$rc" ] || touch "$rc"
   if grep -qF "# >>> nav ncd >>>" "$rc"; then
-    echo "ncd 已配置（${rc}），跳过"
+    # 已存在旧函数：删掉重写，保证升级拿到最新版（幂等，不会重复追加）
+    remove_ncd "$rc"
+    printf '\n%s\n' "$NCD_FUNC" >> "$rc"
+    echo "已更新 ncd 函数（${rc}，新开终端或 source ${rc} 生效）"
     return
   fi
   printf '\n%s\n' "$NCD_FUNC" >> "$rc"
