@@ -83,21 +83,18 @@ case ":$PATH:" in
 esac
 
 # ---- ncd 函数自动配置（zsh/bash，marker 标记可卸载） ----
-# 智能分发：⏎ 选中目录 → cd 过去；选中文件 → 默认应用打开
+# 智能分发：⏎ 选中目录 → cd 过去；选中文件 → nav --open 按类型打开
+# （文本→编辑器回退链；可执行→终端；其他→默认应用。避免 Debian open 命令陷阱）
 NCD_FUNC='# >>> nav ncd >>>
-# ncd: 用 nav 导航——⏎ 选中目录→cd 过去；选中文件→默认应用打开；→ 深入；q 停在当前目录
+# ncd: 用 nav 导航——⏎ 选中目录→cd 过去；选中文件→按类型打开；→ 深入；q 停在当前目录
 ncd() {
   local d
   d="$(command nav --print "$@")" || return $?
   if [[ -n "$d" ]]; then
     if [[ -d "$d" ]]; then
       builtin cd "$d"
-    elif command -v open >/dev/null 2>&1; then
-      command open "$d"
-    elif command -v xdg-open >/dev/null 2>&1; then
-      command xdg-open "$d" >/dev/null 2>&1 &
     else
-      printf '\''%s\n'\'' "$d"
+      command nav --open "$d"
     fi
   fi
 }

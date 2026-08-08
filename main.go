@@ -17,14 +17,14 @@ const usageTemplate = `nav %s — 内联弹出式目录导航器（Go 版，单�
   nav --print [路径]   选择后打印绝对路径并退出 → cd "$(nav --print)" / ncd
                        （⏎ 选中当前项 · → 深入目录 · p/q 结束并输出当前目录）
   nav --once [路径]    打开一个文件后立即退出
+  nav --open <文件>    按类型直接打开文件（文本→编辑器，可执行→终端，其他→默认应用）
 
-按键: ↑/↓ 移动 · →/Enter 打开/进入 · ← 上级 · e 编辑器 · a 默认应用
-      空格 预览 · . 隐藏文件 · q/Esc 退出 · p (--print) 输出当前路径
+按键: ↑↓/jk 移动 · →/l/⏎ 打开 · ←/h 上级 · 空格 预览 · . 隐藏文件 · q/Esc 退出
 `
 
 func main() {
 	path := "."
-	printMode, once := false, false
+	printMode, once, openMode := false, false, false
 	for _, arg := range os.Args[1:] {
 		switch {
 		case arg == "-h" || arg == "--help":
@@ -37,6 +37,8 @@ func main() {
 			printMode = true
 		case arg == "--once":
 			once = true
+		case arg == "--open":
+			openMode = true
 		case strings.HasPrefix(arg, "-"):
 			fmt.Fprintf(os.Stderr, "nav: 未知选项: %s\n（用 --help 查看用法）\n", arg)
 			os.Exit(2)
@@ -44,24 +46,45 @@ func main() {
 			path = arg
 		}
 	}
-	// 非 TTY 守卫
-	fi, err := os.Stdin.Stat()
-	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
-		fmt.Fprintln(os.Stderr, "nav: 标准输入不是终端（TTY），无法交互")
-		os.Exit(2)
-	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "nav: 无法解析路径: %s\n", path)
 		os.Exit(2)
 	}
 	st, err := os.Stat(abs)
-	if err != nil || !st.IsDir() {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "nav: 路径不存在: %s\n", path)
+		os.Exit(2)
+	}
+
+	fd := int(os.Stdin.Fd())
+	if openMode {
+		if st.IsDir() {
+			fmt.Fprintln(os.Stderr, "nav: --open 需要文件路径（不是目录）")
+			os.Exit(2)
+		}
+		app := &App{cwd: filepath.Dir(abs), fd: fd}
+		if old, err := makeCbreak(fd); err == nil {
+			app.oldState = old
+			defer restoreTerm(fd, old)
+		} // 非 TTY（管道调用）时降级：不进入 cbreak，直接运行
+		if !app.openFile(abs) {
+			os.Exit(1)
+		}
+		return
+	}
+
+	// 非 TTY 守卫（交互模式）
+	if fi, err := os.Stdin.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		fmt.Fprintln(os.Stderr, "nav: 标准输入不是终端（TTY），无法交互")
+		os.Exit(2)
+	}
+	if !st.IsDir() {
 		fmt.Fprintf(os.Stderr, "nav: 不是目录: %s\n", path)
 		os.Exit(2)
 	}
 
 	go keyReaderLoop()
 	app := &App{cwd: abs, printMode: printMode, once: once}
-	os.Exit(app.run(int(os.Stdin.Fd())))
+	os.Exit(app.run(fd))
 }

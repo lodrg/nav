@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -194,6 +195,45 @@ func (a *App) showError(msg string) {
 	buf := make([]byte, 1)
 	os.Stdin.Read(buf)
 	a.lastHeight = 0
+}
+
+// fileInfoEntry：把 os.FileInfo 适配成 os.DirEntry，复用 classify 类型判定。
+type fileInfoEntry struct {
+	os.FileInfo
+}
+
+func (e fileInfoEntry) Type() fs.FileMode          { return e.FileInfo.Mode().Type() }
+func (e fileInfoEntry) Info() (os.FileInfo, error) { return e.FileInfo, nil }
+
+// openFile：按类型直接打开文件（--open 子命令，ncd 复用）。
+// 文本→编辑器（回退链）；可执行→终端运行；其他→默认应用（macOS open / Linux xdg-open / Windows start）。
+func (a *App) openFile(full string) bool {
+	info, err := os.Stat(full)
+	if err != nil {
+		a.showError(fmt.Sprintf("无法打开 %s: %v", full, err))
+		return false
+	}
+	if info.IsDir() {
+		openDefault(full)
+		return true
+	}
+	kind := classify(filepath.Dir(full), fileInfoEntry{info})
+	switch kind {
+	case "text":
+		editor := pickEditor()
+		if editor == "" {
+			a.showError("未找到编辑器（已尝试 vim/vi/nano/code），请设置 $EDITOR 环境变量")
+			return false
+		}
+		a.suspendRun([]string{editor, full}, false)
+		return true
+	case "exe":
+		a.suspendRun([]string{full}, true)
+		return true
+	default:
+		openDefault(full)
+		return true
+	}
 }
 
 func (a *App) openEntry(idx int, method string) bool {
