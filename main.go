@@ -7,9 +7,10 @@ import (
 	"strings"
 )
 
-const version = "0.2.0"
+// version 构建时注入：go build -ldflags "-X main.version=<tag>"（见 build.sh / workflow）
+var version = "dev"
 
-const usage = `nav 0.2.0 — 内联弹出式目录导航器（Go 版，单二进制）
+const usageTemplate = `nav %s — 内联弹出式目录导航器（Go 版，单二进制）
 
 用法:
   nav [路径]           弹出导航器（默认当前目录）
@@ -27,7 +28,7 @@ func main() {
 	for _, arg := range os.Args[1:] {
 		switch {
 		case arg == "-h" || arg == "--help":
-			fmt.Print(usage)
+			fmt.Printf(usageTemplate, version)
 			return
 		case arg == "--version":
 			fmt.Printf("nav %s\n", version)
