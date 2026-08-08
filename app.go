@@ -6,13 +6,12 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 )
 
 const (
-	footerNormal = "↑↓/jk 移动 · →/l 进入 · ←/h 上级 · e 编辑 · a 应用 · 空格 预览 · q 退出"
+	footerNormal = "↑↓/jk 移动 · →/l ⏎ 打开 · ←/h 上级 · 空格 预览 · q 退出"
 	footerPrint  = "↑↓/jk 移动 · →/l 深入 · ⏎ 选中 · p/q 输出 · h/← 上级 · Esc 退出"
 )
 
@@ -171,6 +170,32 @@ func (a *App) erasePopup() {
 
 // ---- 打开策略 ----
 
+// pickEditor 编辑器回退链：$VISUAL → $EDITOR → vim → vi → nano → code → notepad
+func pickEditor() string {
+	var candidates []string
+	for _, env := range []string{"VISUAL", "EDITOR"} {
+		if v := os.Getenv(env); v != "" {
+			candidates = append(candidates, v)
+		}
+	}
+	candidates = append(candidates, "vim", "vi", "nano", "code", "notepad")
+	for _, c := range candidates {
+		if _, err := exec.LookPath(c); err == nil {
+			return c
+		}
+	}
+	return ""
+}
+
+// showError 在弹层位置显示错误并等待按键（不静默失败）。
+func (a *App) showError(msg string) {
+	a.erasePopup()
+	ui(msg + "\n按任意键返回…")
+	buf := make([]byte, 1)
+	os.Stdin.Read(buf)
+	a.lastHeight = 0
+}
+
 func (a *App) openEntry(idx int, method string) bool {
 	e := a.entries[idx]
 	full := filepath.Join(a.cwd, e.Name)
@@ -179,7 +204,7 @@ func (a *App) openEntry(idx int, method string) bool {
 		return false
 	}
 	if e.IsDir {
-		if method == "default" { // a 键在目录上 → Finder/文件管理器
+		if method == "default" { // 目录用文件管理器打开（预留 API）
 			openDefault(full)
 			return true
 		}
@@ -187,16 +212,10 @@ func (a *App) openEntry(idx int, method string) bool {
 		return false
 	}
 	if (method == "auto" || method == "editor") && (e.Kind == "text" || method == "editor") {
-		editor := os.Getenv("VISUAL")
+		editor := pickEditor()
 		if editor == "" {
-			editor = os.Getenv("EDITOR")
-		}
-		if editor == "" {
-			if runtime.GOOS == "windows" {
-				editor = "notepad"
-			} else {
-				editor = "vim"
-			}
+			a.showError("未找到编辑器（已尝试 vim/vi/nano/code），请设置 $EDITOR 环境变量")
+			return true
 		}
 		a.suspendRun([]string{editor, full}, false)
 		return true
@@ -214,19 +233,18 @@ func (a *App) suspendRun(argv []string, waitKey bool) {
 	restoreTerm(a.fd, a.oldState)
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	rc := 0
-	if err := cmd.Run(); err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			rc = ee.ExitCode()
+	err := cmd.Run()
+	a.oldState, _ = makeCbreak(a.fd)
+	msg := ""
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() != 0 {
+			msg = fmt.Sprintf("（退出码 %d）", ee.ExitCode())
+		} else if !ok {
+			msg = fmt.Sprintf("（启动失败: %v）", err)
 		}
 	}
-	a.oldState, _ = makeCbreak(a.fd)
-	if waitKey {
-		msg := "按任意键返回…"
-		if rc != 0 {
-			msg = fmt.Sprintf("（退出码 %d）按任意键返回…", rc)
-		}
-		ui(msg)
+	if waitKey || msg != "" {
+		ui(msg + "按任意键返回…")
 		buf := make([]byte, 1)
 		os.Stdin.Read(buf)
 	}
@@ -310,20 +328,6 @@ func (a *App) handleKey(key string) string {
 			a.previewOn = false
 		} else if n > 0 {
 			a.loadPreview(a.entries[a.cursor])
-		}
-		return "redraw"
-	case "e":
-		if n > 0 {
-			a.previewOn = false
-			a.openEntry(a.cursor, "editor")
-			return "opened_file"
-		}
-		return "redraw"
-	case "a":
-		if n > 0 {
-			a.previewOn = false
-			a.openEntry(a.cursor, "default")
-			return "opened_file"
 		}
 		return "redraw"
 	case "p":
