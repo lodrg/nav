@@ -77,15 +77,22 @@ else
 fi
 chmod +x "$DEST/nav"
 
-case ":$PATH:" in
-  *":$DEST:"*) ;;
-  *) echo "提示: $DEST 不在 PATH，请先加入: export PATH=\"$DEST:\$PATH\"" >&2 ;;
-esac
+# PATH 已在 shell 配置中自动处理（见 setup_ncd：写入幂等 case 块）
 
 # ---- ncd 函数自动配置（zsh/bash，marker 标记可卸载） ----
 # 智能分发：⏎ 选中目录 → cd 过去；选中文件 → nav --open 按类型打开
 # （文本→编辑器回退链；可执行→终端；其他→默认应用。避免 Debian open 命令陷阱）
+# 同时自动把安装目录加入 PATH（运行时幂等）+ zsh Tab 补全
 NCD_FUNC='# >>> nav ncd >>>
+# nav 安装目录自动加入 PATH（运行时幂等：已在 PATH 则跳过）
+case ":$PATH:" in
+  *:"__NAV_DEST__":*) ;;
+  *) export PATH="__NAV_DEST__:$PATH" ;;
+esac
+# zsh 补全：nav/ncd 按 Tab 补全路径（仅 zsh 且 compinit 已加载时启用）
+if [ -n "$ZSH_VERSION" ] && whence compdef >/dev/null 2>&1; then
+  compdef _files nav ncd
+fi
 # ncd: 用 nav 导航——⏎ 选中目录→cd 过去；选中文件→按类型打开；→ 深入；q 停在当前目录
 ncd() {
   local d
@@ -99,6 +106,13 @@ ncd() {
   fi
 }
 # <<< nav ncd <<<'
+
+# 把 NCD_FUNC 写入 rc：注入实际安装目录（__NAV_DEST__ → $DEST）
+write_ncd() {
+  rc="$1"
+  func=$(printf '%s' "$NCD_FUNC" | sed "s|__NAV_DEST__|$DEST|g")
+  printf '\n%s\n' "$func" >> "$rc"
+}
 
 # bash 登录 shell 兼容：SSH 登录时读 .bash_profile/.profile 而非 .bashrc。
 # 若登录文件未加载 .bashrc，追加一行（带 BASH_VERSION 保护，非 bash 下无害）。
@@ -136,11 +150,11 @@ setup_ncd() {
   if grep -qF "# >>> nav ncd >>>" "$rc"; then
     # 已存在旧函数：删掉重写，保证升级拿到最新版（幂等，不会重复追加）
     remove_ncd "$rc"
-    printf '\n%s\n' "$NCD_FUNC" >> "$rc"
+    write_ncd "$rc"
     echo "已更新 ncd 函数（${rc}，新开终端或 source ${rc} 生效）"
     return
   fi
-  printf '\n%s\n' "$NCD_FUNC" >> "$rc"
+  write_ncd "$rc"
   echo "已把 ncd 函数写入 ${rc}（新开终端或 source ${rc} 生效）"
 }
 setup_ncd

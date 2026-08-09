@@ -17,6 +17,13 @@ Write-Host "下载 $url"
 Invoke-WebRequest -Uri $url -OutFile $out
 Write-Host "已安装: $out"
 
+# ---- 把安装目录加入用户 PATH（持久化，幂等） ----
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($userPath -notlike "*$dest*") {
+  [Environment]::SetEnvironmentVariable("Path", "$dest;$userPath", "User")
+  Write-Host "已把 $dest 加入用户 PATH（新开终端生效）"
+}
+
 # ---- ncd 函数自动配置（PowerShell Profile） ----
 $profilePath = $PROFILE
 New-Item -ItemType Directory -Force -Path (Split-Path $profilePath) | Out-Null

@@ -37,7 +37,7 @@ irm https://github.com/lodrg/nav/releases/latest/download/install.ps1 | iex
 | `nav` | 弹出文件列表，浏览、打开文件 | 在**当前**目录里找文件打开 |
 | `ncd` | 同上，但选中目录后 **shell 直接切过去** | 想去**别的**目录 |
 
-> 安装脚本会自动把 `ncd` 写进你的 shell 配置（zsh → `~/.zshrc`，bash → `~/.bashrc`，PowerShell → `$PROFILE`），不用手动配。
+> 安装脚本会自动完成全部配置：下载对应平台二进制到 `~/.local/bin`、**自动加入 PATH**（无需手动 export）、把 `ncd` 函数写进你的 shell 配置（zsh → `~/.zshrc`，bash → `~/.bashrc`，PowerShell → `$PROFILE`）。新开终端即可用。
 
 ## 打开文件：每种类型自动用对应方式
 
