@@ -88,6 +88,20 @@ NAV_UNINSTALL=1 sh /tmp/nav-install.sh
 | Linux (arm64/amd64) | ✅ 完整支持 | `xdg-open` |
 | Windows (arm64/amd64) | ✅ 支持（建议 Windows Terminal） | `cmd /c start` |
 
+## 性能
+
+单静态二进制、零依赖，启动即点即出（Apple M1 Pro 实测）：
+
+| 场景（中位数） | nav (Go) | Python 参考版 |
+|---|---|---|
+| 纯进程启动 | **19.7 ms** | 42.2 ms |
+| 完整冷启动 · 普通目录 | **35.9 ms** | 56.4 ms |
+| 完整冷启动 · 2050 项大目录 | **43.7 ms** | 73.6 ms |
+| 二进制体积 | **1.61 MB** | 脚本+解释器 |
+
+比 ranger（300–500 ms）快一个数量级，与 lf/nnn 同为编译型轻量派。
+完整报告（方法学、拆解分析、对比）：[PERF.md](PERF.md)
+
 ## 给开发者
 
 ```bash
