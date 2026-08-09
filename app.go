@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	footerNormal = "↑↓/jk 移动 · →/l ⏎ 打开 · ←/h 上级 · 空格 预览 · q 退出"
+	footerNormal = "↑↓/jk 移动 · →/l ⏎ 打开 · ←/h 上级 · Tab 排序 · 空格 预览 · q 退出"
 	footerPrint  = "↑↓/jk 移动 · →/l 深入 · ⏎ 选中 · p/q 输出 · h/← 上级 · Esc 退出"
 )
 
@@ -31,6 +31,7 @@ type App struct {
 	cursor     int
 	top        int
 	showHidden bool
+	sortMode   int // 0 名称 / 1 时间 / 2 大小（Tab 循环）
 	lastHeight int
 	preview    []string
 	previewOn  bool
@@ -52,8 +53,10 @@ func (a *App) enterDir(full string) {
 }
 
 func (a *App) load() {
-	items, err := scan(a.cwd, a.showHidden)
-	a.entries, a.err = items, err
+	a.entries, a.err = scan(a.cwd, a.showHidden)
+	if a.err == nil {
+		sortEntries(a.entries, a.sortMode)
+	}
 	if len(a.entries) == 0 {
 		a.cursor = 0
 	} else if a.cursor > len(a.entries)-1 {
@@ -98,8 +101,8 @@ func (a *App) formatPath(width int) string {
 			p = "~" + p[len(home):]
 		}
 	}
-	// 宽度预算：图标(2) + 空格(1) + 条目数后缀
-	suffix := fmt.Sprintf(" (%d 项)", len(a.entries))
+	// 宽度预算：图标(2) + 空格(1) + 条目数+排序后缀
+	suffix := fmt.Sprintf(" (%d 项 · %s)", len(a.entries), sortLabels[a.sortMode])
 	avail := width - 4 - dispWidth(suffix)
 	if avail < 8 {
 		avail = 8
@@ -362,6 +365,23 @@ func (a *App) handleKey(key string) string {
 	case ".":
 		a.showHidden = !a.showHidden
 		a.load()
+		return "redraw"
+	case "tab":
+		a.sortMode = (a.sortMode + 1) % len(sortLabels)
+		keep := ""
+		if n > 0 {
+			keep = a.entries[a.cursor].Name
+		}
+		a.load()
+		if keep != "" { // 重排后尽量保持光标停留在同一项
+			for i := range a.entries {
+				if a.entries[i].Name == keep {
+					a.cursor, a.top = i, 0
+					break
+				}
+			}
+		}
+		a.previewOn = false
 		return "redraw"
 	case " ":
 		if a.previewOn {

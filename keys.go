@@ -48,6 +48,8 @@ func readKey() string {
 	switch b {
 	case '\r', '\n':
 		return "enter"
+	case '	':
+		return "tab"
 	case 0x03:
 		return "ctrl-c" // ISIG 保留时不会出现；防御性处理
 	}

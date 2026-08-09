@@ -6,16 +6,27 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Entry 是目录列表中的一个条目。
 type Entry struct {
-	Name  string
-	IsDir bool
-	Kind  string // dir | exe | text | media | unknown
-	Size  string
-	MTime string
+	Name   string
+	IsDir  bool
+	Kind   string // dir | exe | text | media | unknown
+	Size   string
+	SizeN  int64 // 原始字节数（排序用）
+	MTime  string
+	MTimeN time.Time // 原始修改时间（排序用）
 }
+
+const (
+	sortName = iota // 名称（casefold，Finder 风格）
+	sortTime        // 修改时间（新→旧）
+	sortSize        // 大小（大→小）
+)
+
+var sortLabels = []string{"名称", "时间", "大小"}
 
 var textExts = map[string]bool{
 	".py": true, ".pyw": true, ".md": true, ".txt": true, ".json": true,
@@ -105,7 +116,7 @@ func humanSize(n int64) string {
 	return fmt.Sprintf("%.1f PB", v)
 }
 
-// scan 扫描目录：目录在前、casefold 排序（macOS Finder 风格）。
+// scan 扫描目录（排序由 sortEntries 按模式处理，在 load 中调用）。
 func scan(path string, showHidden bool) ([]Entry, error) {
 	des, err := os.ReadDir(path)
 	if err != nil {
@@ -118,29 +129,51 @@ func scan(path string, showHidden bool) ([]Entry, error) {
 			continue
 		}
 		var size, mtime string
+		var sizeN int64
+		var mtimeN time.Time
 		if info, err := d.Info(); err == nil {
+			mtimeN = info.ModTime()
 			if d.IsDir() {
 				size = "—"
 			} else {
-				size = humanSize(info.Size())
+				sizeN = info.Size()
+				size = humanSize(sizeN)
 			}
-			mtime = info.ModTime().Format("2006-01-02 15:04")
+			mtime = mtimeN.Format("2006-01-02 15:04")
 		} else {
 			size, mtime = "?", ""
 		}
 		out = append(out, Entry{
-			Name:  name,
-			IsDir: d.IsDir(),
-			Kind:  classify(path, d),
-			Size:  size,
-			MTime: mtime,
+			Name:   name,
+			IsDir:  d.IsDir(),
+			Kind:   classify(path, d),
+			Size:   size,
+			SizeN:  sizeN,
+			MTime:  mtime,
+			MTimeN: mtimeN,
 		})
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].IsDir != out[j].IsDir {
-			return out[i].IsDir
-		}
-		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
-	})
 	return out, nil
+}
+
+// sortEntries 按模式排序：目录始终在前。
+// sortName: casefold 名称升序；sortTime: 修改时间新→旧；sortSize: 大小大→小。
+// 时间/大小相同时回退到名称比较，保证顺序稳定。
+func sortEntries(items []Entry, mode int) {
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].IsDir != items[j].IsDir {
+			return items[i].IsDir
+		}
+		switch mode {
+		case sortTime:
+			if !items[i].MTimeN.Equal(items[j].MTimeN) {
+				return items[i].MTimeN.After(items[j].MTimeN)
+			}
+		case sortSize:
+			if items[i].SizeN != items[j].SizeN {
+				return items[i].SizeN > items[j].SizeN
+			}
+		}
+		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
+	})
 }

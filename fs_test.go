@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func mkEntry(t *testing.T, dir, name string, content []byte, mode os.FileMode) os.DirEntry {
@@ -93,6 +94,7 @@ func TestScanSortedDirsFirstCasefold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sortEntries(items, sortName)
 	// casefold 排序："a.txt" < "B.txt"（大小写不敏感，Finder 风格）
 	want := []string{"A_dir", "b_dir", "a.txt", "B.txt"}
 	for i, w := range want {
@@ -102,6 +104,29 @@ func TestScanSortedDirsFirstCasefold(t *testing.T) {
 	}
 	if !items[0].IsDir || !items[1].IsDir {
 		t.Fatal("dirs must come first")
+	}
+}
+
+func TestSortByTimeAndSize(t *testing.T) {
+	// 时间与大小故意相反，才能区分两种排序模式
+	items := []Entry{
+		{Name: "recent.txt", IsDir: false, SizeN: 10, MTimeN: time.Unix(300, 0)},
+		{Name: "mid.txt", IsDir: false, SizeN: 50, MTimeN: time.Unix(200, 0)},
+		{Name: "stale.txt", IsDir: false, SizeN: 999, MTimeN: time.Unix(100, 0)},
+		{Name: "dir1", IsDir: true},
+	}
+	sortEntries(items, sortTime)
+	if !items[0].IsDir {
+		t.Fatal("dirs must come first")
+	}
+	// 时间新→旧: recent(300) > mid(200) > stale(100)
+	if items[1].Name != "recent.txt" || items[2].Name != "mid.txt" || items[3].Name != "stale.txt" {
+		t.Fatalf("time sort wrong: %+v", names(items))
+	}
+	sortEntries(items, sortSize)
+	// 大小大→小: stale(999) > mid(50) > recent(10)
+	if items[1].Name != "stale.txt" || items[2].Name != "mid.txt" || items[3].Name != "recent.txt" {
+		t.Fatalf("size sort wrong: %+v", names(items))
 	}
 }
 
