@@ -1,14 +1,23 @@
+<div align="center">
+
 # nav
 
-在终端里弹出当前目录的文件列表：方向键（或 hjkl）选择，回车打开文件、右键进入目录；`ncd` 选中目录后 shell 直接切换过去。
+在终端里弹出当前目录的文件列表，用方向键或 hjkl 浏览，回车打开文件，`ncd` 一键跳转目录。
+
+[English](README.en.md) · 简体中文
+
+![version](https://img.shields.io/github/v/tag/lodrg/nav?label=version&color=blue)
+![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+![size](https://img.shields.io/badge/size-1.6MB-brightgreen)
+![downloads](https://img.shields.io/github/downloads/lodrg/nav/total?color=green)
+
+</div>
 
 - 单静态二进制，约 1.6 MB，零运行时依赖
 - macOS / Linux / Windows
 - 打开文件时按类型自动选择方式（编辑器 / 默认应用 / 终端运行）
 - Tab 切换排序（名称 / 时间 / 大小）
 - 弹层顶部实时显示当前路径
-
-[English](README.en.md) · 简体中文
 
 ## 安装
 

@@ -1,14 +1,23 @@
+<div align="center">
+
 # nav
 
-A terminal file navigator: it pops up the current directory's file list — arrow keys (or vim-style `hjkl`) to move, Enter to open, right-arrow to enter a directory, and `ncd` to switch your shell straight to the selected directory.
+A terminal file navigator: arrow keys (or vim-style `hjkl`) to browse, Enter to open, and `ncd` to jump straight to the selected directory.
+
+[简体中文](README.md) · English
+
+![version](https://img.shields.io/github/v/tag/lodrg/nav?label=version&color=blue)
+![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+![size](https://img.shields.io/badge/size-1.6MB-brightgreen)
+![downloads](https://img.shields.io/github/downloads/lodrg/nav/total?color=green)
+
+</div>
 
 - Single static binary, ~1.6 MB, zero runtime dependencies
 - macOS / Linux / Windows
 - File type picks the opener automatically (editor / default app / run in terminal)
 - `Tab` cycles sorting: name / time / size
 - Current path shown at the top of the popup
-
-[简体中文](README.md) · English
 
 ## Install
 
