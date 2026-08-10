@@ -16,7 +16,7 @@ type Entry struct {
 	IsDir  bool
 	Kind   string // dir | exe | text | media | unknown
 	Size   string
-	SizeN  int64     // 原始字节数（排序用）
+	SizeN  int64 // 原始字节数（排序用）
 	MTime  string
 	MTimeN time.Time // 原始修改时间（排序用）
 }

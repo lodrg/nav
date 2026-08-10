@@ -220,8 +220,8 @@ type fileInfoEntry struct {
 	os.FileInfo
 }
 
-func (e fileInfoEntry) Type() iofs.FileMode            { return e.FileInfo.Mode().Type() }
-func (e fileInfoEntry) Info() (os.FileInfo, error)     { return e.FileInfo, nil }
+func (e fileInfoEntry) Type() iofs.FileMode        { return e.FileInfo.Mode().Type() }
+func (e fileInfoEntry) Info() (os.FileInfo, error) { return e.FileInfo, nil }
 
 // OpenFileMode：--open 子命令入口（ncd 复用）。按类型打开文件并返回退出码。
 func OpenFileMode(cwd, full string, fd int) int {
