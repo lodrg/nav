@@ -1,14 +1,20 @@
-package main
+// Package core App 状态机：主循环、按键处理、打开策略。
+package core
 
 import (
 	"fmt"
-	"io/fs"
+	iofs "io/fs"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"nav/internal/fs"
+	"nav/internal/opener"
+	"nav/internal/render"
+	"nav/internal/term"
 )
 
 const (
@@ -22,11 +28,12 @@ type historyEntry struct {
 	top    int
 }
 
+// App 是导航器的应用状态。
 type App struct {
 	cwd        string
 	printMode  bool
 	once       bool
-	entries    []Entry
+	entries    []fs.Entry
 	err        error
 	cursor     int
 	top        int
@@ -41,6 +48,14 @@ type App struct {
 	hist       []historyEntry // 浏览历史栈：进入目录前的位置，h/← 返回时恢复
 }
 
+// New 创建 App。
+func New(cwd string, printMode, once bool) *App {
+	return &App{cwd: cwd, printMode: printMode, once: once}
+}
+
+// SetFD 设置终端 fd（--open 模式等非 Run 路径使用）。
+func (a *App) SetFD(fd int) { a.fd = fd }
+
 // enterDir 进入目录：先记住当前位置（返回时可恢复），再切换并从头浏览。
 func (a *App) enterDir(full string) {
 	a.hist = append(a.hist, historyEntry{a.cwd, a.cursor, a.top})
@@ -53,9 +68,9 @@ func (a *App) enterDir(full string) {
 }
 
 func (a *App) load() {
-	a.entries, a.err = scan(a.cwd, a.showHidden)
+	a.entries, a.err = fs.Scan(a.cwd, a.showHidden)
 	if a.err == nil {
-		sortEntries(a.entries, a.sortMode)
+		fs.SortEntries(a.entries, a.sortMode)
 	}
 	if len(a.entries) == 0 {
 		a.cursor = 0
@@ -65,9 +80,9 @@ func (a *App) load() {
 	a.top = min(a.top, a.cursor)
 }
 
-func (a *App) loadPreview(e Entry) {
+func (a *App) loadPreview(e fs.Entry) {
 	if e.Kind != "text" {
-		a.preview = []string{"（非文本文件，按 → 打开 · a 用默认应用 · 空格 返回）"}
+		a.preview = []string{"（非文本文件，按 → 打开 · 空格 返回）"}
 		a.previewOn = true
 		return
 	}
@@ -102,16 +117,16 @@ func (a *App) formatPath(width int) string {
 		}
 	}
 	// 宽度预算：图标(2) + 空格(1) + 条目数+排序后缀
-	suffix := fmt.Sprintf(" (%d 项 · %s)", len(a.entries), sortLabels[a.sortMode])
-	avail := width - 4 - dispWidth(suffix)
+	suffix := fmt.Sprintf(" (%d 项 · %s)", len(a.entries), fs.SortLabels[a.sortMode])
+	avail := width - 4 - render.DispWidth(suffix)
 	if avail < 8 {
 		avail = 8
 	}
-	return "\x1b[1m" + "📂 " + truncateTail(p, avail) + "\x1b[0m" + dim + suffix + reset
+	return "\x1b[1m" + "📂 " + render.TruncateTail(p, avail) + "\x1b[0m" + render.Dim + suffix + render.Reset
 }
 
 func (a *App) draw(first bool) {
-	width, termH := termSize(a.fd)
+	width, termH := term.Size(a.fd)
 	maxH := max(4, termH-2) // 弹层最多占 termH-2 行（路径行 + 内容 + footer）
 	n := len(a.entries)
 
@@ -119,14 +134,14 @@ func (a *App) draw(first bool) {
 	hl := -1
 	if a.previewOn {
 		for _, ln := range a.preview {
-			body = append(body, truncate(ln, width))
+			body = append(body, render.Truncate(ln, width))
 		}
 	} else if n == 0 {
 		msg := "（空目录）"
 		if a.err != nil {
 			msg = a.err.Error()
 		}
-		body = append(body, red+truncate(msg, width)+reset)
+		body = append(body, render.Red+render.Truncate(msg, width)+render.Reset)
 	} else {
 		entryVis := min(n, maxH-2) // 路径行 + footer 占两行
 		a.top = min(a.top, a.cursor)
@@ -135,7 +150,7 @@ func (a *App) draw(first bool) {
 		}
 		a.top = max(0, min(a.top, n-entryVis))
 		for i := a.top; i < a.top+entryVis; i++ {
-			body = append(body, formatRow(a.entries[i], width))
+			body = append(body, render.FormatRow(a.entries[i], width))
 		}
 		hl = 1 + a.cursor - a.top // 路径行占 index 0
 	}
@@ -144,30 +159,30 @@ func (a *App) draw(first bool) {
 	if a.printMode {
 		ftr = footerPrint
 	}
-	lines := append(body[:min(len(body), maxH-1)], dim+truncate(ftr, width)+reset)
+	lines := append(body[:min(len(body), maxH-1)], render.Dim+render.Truncate(ftr, width)+render.Reset)
 	height := len(lines)
 
 	var hlPtr *int
 	if hl >= 0 {
 		hlPtr = &hl
 	}
-	out, newH := renderRegion(lines, height, width, a.lastHeight, hlPtr)
+	out, newH := render.RenderRegion(lines, height, width, a.lastHeight, hlPtr)
 	a.lastHeight = newH
 	if first {
 		out = "\n" + out // 首次绘制：先离开提示符所在行
 	}
-	ui(out)
+	render.UI(out)
 }
 
 func (a *App) erasePopup() {
 	if a.lastHeight > 0 {
 		var b strings.Builder
-		b.WriteString(up(a.lastHeight))
+		b.WriteString(render.Up(a.lastHeight))
 		for i := 0; i < a.lastHeight; i++ {
-			b.WriteString(clearLn + "\n")
+			b.WriteString(render.ClearLn + "\n")
 		}
-		b.WriteString(up(a.lastHeight))
-		ui(b.String())
+		b.WriteString(render.Up(a.lastHeight))
+		render.UI(b.String())
 	}
 	a.lastHeight = 0
 }
@@ -194,22 +209,36 @@ func pickEditor() string {
 // showError 在弹层位置显示错误并等待按键（不静默失败）。
 func (a *App) showError(msg string) {
 	a.erasePopup()
-	ui(msg + "\n按任意键返回…")
+	render.UI(msg + "\n按任意键返回…")
 	buf := make([]byte, 1)
 	os.Stdin.Read(buf)
 	a.lastHeight = 0
 }
 
-// fileInfoEntry：把 os.FileInfo 适配成 os.DirEntry，复用 classify 类型判定。
+// fileInfoEntry：把 os.FileInfo 适配成 os.DirEntry，复用 fs.Classify 类型判定。
 type fileInfoEntry struct {
 	os.FileInfo
 }
 
-func (e fileInfoEntry) Type() fs.FileMode          { return e.FileInfo.Mode().Type() }
-func (e fileInfoEntry) Info() (os.FileInfo, error) { return e.FileInfo, nil }
+func (e fileInfoEntry) Type() iofs.FileMode            { return e.FileInfo.Mode().Type() }
+func (e fileInfoEntry) Info() (os.FileInfo, error)     { return e.FileInfo, nil }
 
-// openFile：按类型直接打开文件（--open 子命令，ncd 复用）。
-// 文本→编辑器（回退链）；可执行→终端运行；其他→默认应用（macOS open / Linux xdg-open / Windows start）。
+// OpenFileMode：--open 子命令入口（ncd 复用）。按类型打开文件并返回退出码。
+func OpenFileMode(cwd, full string, fd int) int {
+	app := New(cwd, false, false)
+	app.fd = fd
+	if old, err := term.Cbreak(fd); err == nil {
+		app.oldState = old
+		defer term.Restore(fd, old)
+	} // 非 TTY（管道调用）时降级：不进入 cbreak，直接运行
+	if !app.openFile(full) {
+		return 1
+	}
+	return 0
+}
+
+// openFile：按类型直接打开文件（--open 子命令）。
+// 文本→编辑器（回退链）；可执行→终端运行；其他→默认应用。
 func (a *App) openFile(full string) bool {
 	info, err := os.Stat(full)
 	if err != nil {
@@ -217,10 +246,10 @@ func (a *App) openFile(full string) bool {
 		return false
 	}
 	if info.IsDir() {
-		openDefault(full)
+		opener.Open(full)
 		return true
 	}
-	kind := classify(filepath.Dir(full), fileInfoEntry{info})
+	kind := fs.Classify(filepath.Dir(full), fileInfoEntry{info})
 	switch kind {
 	case "text":
 		editor := pickEditor()
@@ -234,7 +263,7 @@ func (a *App) openFile(full string) bool {
 		a.suspendRun([]string{full}, true)
 		return true
 	default:
-		openDefault(full)
+		opener.Open(full)
 		return true
 	}
 }
@@ -248,7 +277,7 @@ func (a *App) openEntry(idx int, method string) bool {
 	}
 	if e.IsDir {
 		if method == "default" { // 目录用文件管理器打开（预留 API）
-			openDefault(full)
+			opener.Open(full)
 			return true
 		}
 		a.enterDir(full)
@@ -267,17 +296,17 @@ func (a *App) openEntry(idx int, method string) bool {
 		a.suspendRun([]string{full}, true)
 		return true
 	}
-	openDefault(full)
+	opener.Open(full)
 	return true
 }
 
 func (a *App) suspendRun(argv []string, waitKey bool) {
 	a.erasePopup()
-	restoreTerm(a.fd, a.oldState)
+	term.Restore(a.fd, a.oldState)
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	err := cmd.Run()
-	a.oldState, _ = makeCbreak(a.fd)
+	a.oldState, _ = term.Cbreak(a.fd)
 	msg := ""
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() != 0 {
@@ -287,7 +316,7 @@ func (a *App) suspendRun(argv []string, waitKey bool) {
 		}
 	}
 	if waitKey || msg != "" {
-		ui(msg + "按任意键返回…")
+		render.UI(msg + "按任意键返回…")
 		buf := make([]byte, 1)
 		os.Stdin.Read(buf)
 	}
@@ -367,7 +396,7 @@ func (a *App) handleKey(key string) string {
 		a.load()
 		return "redraw"
 	case "tab":
-		a.sortMode = (a.sortMode + 1) % len(sortLabels)
+		a.sortMode = (a.sortMode + 1) % len(fs.SortLabels)
 		keep := ""
 		if n > 0 {
 			keep = a.entries[a.cursor].Name
@@ -401,15 +430,16 @@ func (a *App) handleKey(key string) string {
 
 // ---- 主循环 ----
 
-func (a *App) run(fd int) int {
+// Run 启动交互主循环，返回进程退出码。
+func (a *App) Run(fd int) int {
 	a.fd = fd
-	old, err := makeCbreak(fd)
+	old, err := term.Cbreak(fd)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "nav: 无法进入终端原始模式:", err)
 		return 2
 	}
 	a.oldState = old
-	defer restoreTerm(fd, a.oldState)
+	defer term.Restore(fd, a.oldState)
 
 	code := 0
 	a.load()
@@ -423,7 +453,7 @@ func (a *App) run(fd int) int {
 		for {
 			select {
 			case s := <-sigCh:
-				restoreTerm(fd, a.oldState)
+				term.Restore(fd, a.oldState)
 				if a.printMode {
 					fmt.Println(a.cwd)
 				}

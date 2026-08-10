@@ -1,12 +1,12 @@
 //go:build windows
 
-package main
+package term
 
 import "golang.org/x/sys/windows"
 
-// makeCbreak：Windows 控制台模式，清 line-input/echo（无 ISIG 概念，
+// Cbreak：Windows 控制台模式，清 line-input/echo（无 ISIG 概念，
 // Ctrl+C 由控制台产生 CTRL_C_EVENT，默认行为即终止）。
-func makeCbreak(fd int) (*uint32, error) {
+func Cbreak(fd int) (any, error) {
 	h := windows.Handle(fd)
 	var mode uint32
 	if err := windows.GetConsoleMode(h, &mode); err != nil {
@@ -20,13 +20,13 @@ func makeCbreak(fd int) (*uint32, error) {
 	return &old, nil
 }
 
-func restoreTerm(fd int, old any) {
+func Restore(fd int, old any) {
 	if m, ok := old.(*uint32); ok {
 		_ = windows.SetConsoleMode(windows.Handle(fd), *m)
 	}
 }
 
-func termSize(fd int) (int, int) {
+func Size(fd int) (int, int) {
 	var info windows.ConsoleScreenBufferInfo
 	if err := windows.GetConsoleScreenBufferInfo(windows.Handle(fd), &info); err != nil {
 		return 80, 24

@@ -1,17 +1,20 @@
-package main
+// Package render 宽度感知的终端渲染（纯函数，可单测）。
+package render
 
 import (
 	"fmt"
 	"os"
 	"strings"
+
+	"nav/internal/fs"
 )
 
 const (
-	reset   = "\x1b[0m"
-	dim     = "\x1b[2m"
-	red     = "\x1b[31m"
-	reverse = "\x1b[7m"
-	clearLn = "\x1b[2K"
+	Reset   = "\x1b[0m"
+	Dim     = "\x1b[2m"
+	Red     = "\x1b[31m"
+	Reverse = "\x1b[7m"
+	ClearLn = "\x1b[2K"
 )
 
 const (
@@ -43,9 +46,9 @@ func isWideRune(r rune) bool {
 	return false
 }
 
-// dispWidth：CJK/emoji 按 2 列；ZWJ/VS16 零宽；
+// DispWidth：CJK/emoji 按 2 列；ZWJ/VS16 零宽；
 // 后跟 VS16 的字符按 emoji 呈现计 2 列（⚙️ 在终端里占 2 列）。
-func dispWidth(s string) int {
+func DispWidth(s string) int {
 	runes := []rune(s)
 	w := 0
 	for i := 0; i < len(runes); i++ {
@@ -74,9 +77,9 @@ func runeWidth(r rune) int {
 	return 1
 }
 
-// truncateTail：超宽时保留尾部（最近路径段最重要），头部省略号。
-func truncateTail(s string, w int) string {
-	if dispWidth(s) <= w {
+// TruncateTail：超宽时保留尾部（最近路径段最重要），头部省略号。
+func TruncateTail(s string, w int) string {
+	if DispWidth(s) <= w {
 		return s
 	}
 	runes := []rune(s)
@@ -93,15 +96,15 @@ func truncateTail(s string, w int) string {
 	return "…" + string(runes[len(runes)-keep:])
 }
 
-// truncate 宽度感知截断：不撕裂 CJK，超宽补 …。
-func truncate(s string, w int) string {
-	if dispWidth(s) <= w {
+// Truncate 宽度感知截断：不撕裂 CJK，超宽补 …。
+func Truncate(s string, w int) string {
+	if DispWidth(s) <= w {
 		return s
 	}
 	var b strings.Builder
 	for _, r := range s {
-		// 用 dispWidth 累加（而非逐 rune 宽度），保证 VS16 组合宽度一致
-		if dispWidth(b.String()+string(r)) > w-1 {
+		// 用 DispWidth 累加（而非逐 rune 宽度），保证 VS16 组合宽度一致
+		if DispWidth(b.String()+string(r)) > w-1 {
 			break
 		}
 		b.WriteRune(r)
@@ -109,38 +112,39 @@ func truncate(s string, w int) string {
 	return b.String() + "…"
 }
 
-func up(n int) string {
+func Up(n int) string {
 	if n > 0 {
 		return fmt.Sprintf("\x1b[%dA", n)
 	}
 	return ""
 }
 
-// renderRegion 在终端内联区域重绘（纯函数）。lines 必须是已按宽度截断的行。
+// RenderRegion 在终端内联区域重绘（纯函数）。lines 必须是已按宽度截断的行。
 // 返回 (转义串, 新高度)。算法：上移 lastHeight 行 → 清空并重写
 // max(lastHeight, height) 行 → 若旧区域更高则把光标移回新区域底部。
-func renderRegion(lines []string, height, width, lastHeight int, highlight *int) (string, int) {
+func RenderRegion(lines []string, height, width, lastHeight int, highlight *int) (string, int) {
 	total := max(lastHeight, height)
 	var b strings.Builder
-	b.WriteString(up(lastHeight))
+	b.WriteString(Up(lastHeight))
 	for i := 0; i < total; i++ {
-		b.WriteString(clearLn)
+		b.WriteString(ClearLn)
 		if i < height && i < len(lines) {
 			row := lines[i]
 			if highlight != nil && i == *highlight {
-				row = reverse + row + reset
+				row = Reverse + row + Reset
 			}
 			b.WriteString(row)
 		}
 		b.WriteString("\n")
 	}
 	if lastHeight > height {
-		b.WriteString(up(lastHeight - height))
+		b.WriteString(Up(lastHeight - height))
 	}
 	return b.String(), height
 }
 
-func formatRow(e Entry, width int) string {
+// FormatRow 渲染一行目录条目：图标 + 名称 + 大小 + 修改时间。
+func FormatRow(e fs.Entry, width int) string {
 	icon := iconFile
 	switch {
 	case e.IsDir:
@@ -155,8 +159,8 @@ func formatRow(e Entry, width int) string {
 	if nameW < 8 {
 		nameW = 8
 	}
-	name := truncate(e.Name, nameW)
-	pad := nameW - dispWidth(name)
+	name := Truncate(e.Name, nameW)
+	pad := nameW - DispWidth(name)
 	if pad < 0 {
 		pad = 0
 	}
@@ -167,8 +171,8 @@ func formatRow(e Entry, width int) string {
 	return fmt.Sprintf("%s %s%s %9s %s", icon, name, strings.Repeat(" ", pad), size, e.MTime)
 }
 
-// ui：UI 输出统一走 stderr，保证 stdout 只承载结果路径
+// UI：UI 输出统一走 stderr，保证 stdout 只承载结果路径
 // （ncd / cd "$(nav --print)" 依赖命令替换捕获 stdout）。
-func ui(s string) {
+func UI(s string) {
 	os.Stderr.WriteString(s)
 }

@@ -1,11 +1,11 @@
 //go:build !darwin && !linux && !windows
 
-package main
+package term
 
 import "golang.org/x/sys/unix"
 
-// 其他 POSIX（FreeBSD 等）：BSD 风格 ioctl 请求名，与 darwin 一致。
-func makeCbreak(fd int) (*unix.Termios, error) {
+// Cbreak 其他 POSIX（FreeBSD 等）：BSD 风格 ioctl 请求名，与 darwin 一致。
+func Cbreak(fd int) (any, error) {
 	old, err := unix.IoctlGetTermios(fd, unix.TIOCGETA)
 	if err != nil {
 		return nil, err
@@ -20,13 +20,13 @@ func makeCbreak(fd int) (*unix.Termios, error) {
 	return old, nil
 }
 
-func restoreTerm(fd int, old any) {
+func Restore(fd int, old any) {
 	if t, ok := old.(*unix.Termios); ok {
 		_ = unix.IoctlSetTermios(fd, unix.TIOCSETA, t)
 	}
 }
 
-func termSize(fd int) (int, int) {
+func Size(fd int) (int, int) {
 	ws, err := unix.IoctlGetWinsize(fd, unix.TIOCGWINSZ)
 	if err != nil || ws.Col == 0 || ws.Row == 0 {
 		return 80, 24

@@ -119,6 +119,15 @@ Directory → `cd`; file → `nav --open` opens it by type. For scripting, use `
 go test ./...       # unit tests
 ```
 
-Layout: `main.go` entry and arg parsing, `app.go` state machine and open strategy, `fs.go` scan / type detection / sorting, `render.go` width-aware rendering, `keys.go` key reading, `term_*.go` terminal layer, `opener_*.go` cross-platform opening.
+Layout:
+
+```
+main.go             entry and arg parsing (package main)
+internal/fs/        scan / type detection / sorting (name·time·size)
+internal/render/    width-aware rendering (pure functions, unit-testable)
+internal/core/      App state machine / key handling / open strategy
+internal/term/      terminal layer (cbreak: darwin/linux/windows)
+internal/opener/    cross-platform opening (open / xdg-open / cmd start)
+```
 
 Design notes: UI goes to stderr, stdout carries only the result path (the contract `ncd` relies on); CJK/emoji width-aware truncation.

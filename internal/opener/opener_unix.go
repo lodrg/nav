@@ -1,14 +1,14 @@
 //go:build !windows
 
-package main
+package opener
 
 import (
 	"os/exec"
 	"runtime"
 )
 
-// openDefault 用系统默认应用打开（不阻塞）。
-func openDefault(path string) {
+// Open 用系统默认应用打开（不阻塞）。
+func Open(path string) {
 	cmd := "xdg-open"
 	if runtime.GOOS == "darwin" {
 		cmd = "open"

@@ -1,17 +1,19 @@
-package main
+package core
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"nav/internal/fs"
 )
 
 // 构造不碰终端的 App 实例
 func testApp(t *testing.T, path string, printMode, once bool) *App {
 	t.Helper()
 	app := &App{cwd: path, printMode: printMode, once: once}
-	app.entries = []Entry{
+	app.entries = []fs.Entry{
 		{Name: "a", IsDir: false, Kind: "text", Size: "1 B", MTime: "2026-01-01 00:00"},
 		{Name: "b", IsDir: false, Kind: "media", Size: "2 B", MTime: "2026-01-01 00:00"},
 		{Name: "sub", IsDir: true, Kind: "dir", Size: "—", MTime: "2026-01-01 00:00"},
@@ -224,7 +226,7 @@ func TestHjklLeftRight(t *testing.T) {
 
 func TestFormatPathHomeAbbrev(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	app := &App{cwd: home, entries: []Entry{{Name: "x"}}}
+	app := &App{cwd: home, entries: []fs.Entry{{Name: "x"}}}
 	line := app.formatPath(100)
 	if !strings.Contains(line, "~") {
 		t.Fatalf("home should abbreviate to ~: %q", line)

@@ -1,4 +1,4 @@
-package main
+package fs
 
 import (
 	"os"
@@ -32,7 +32,7 @@ func TestClassifyDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := os.ReadDir(dir)
-	if got := classify(dir, d[0]); got != "dir" {
+	if got := Classify(dir, d[0]); got != "dir" {
 		t.Fatalf("want dir, got %s", got)
 	}
 }
@@ -41,7 +41,7 @@ func TestClassifyTextByExt(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.py", "README.md", "Dockerfile", ".gitignore"} {
 		d := mkEntry(t, dir, name, []byte("x"), 0o644)
-		if got := classify(dir, d); got != "text" {
+		if got := Classify(dir, d); got != "text" {
 			t.Fatalf("%s: want text, got %s", name, got)
 		}
 	}
@@ -51,7 +51,7 @@ func TestClassifyMediaByExt(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"pic.png", "doc.pdf", "a.zip"} {
 		d := mkEntry(t, dir, name, []byte("x"), 0o644)
-		if got := classify(dir, d); got != "media" {
+		if got := Classify(dir, d); got != "media" {
 			t.Fatalf("%s: want media, got %s", name, got)
 		}
 	}
@@ -60,7 +60,7 @@ func TestClassifyMediaByExt(t *testing.T) {
 func TestClassifyExecutable(t *testing.T) {
 	dir := t.TempDir()
 	d := mkEntry(t, dir, "run.sh", []byte("#!/bin/sh\n"), 0o755)
-	if got := classify(dir, d); got != "exe" {
+	if got := Classify(dir, d); got != "exe" {
 		t.Fatalf("want exe, got %s", got)
 	}
 }
@@ -68,7 +68,7 @@ func TestClassifyExecutable(t *testing.T) {
 func TestClassifySniffTextNoExt(t *testing.T) {
 	dir := t.TempDir()
 	d := mkEntry(t, dir, "NOTES", []byte("hello world\nno nul\n"), 0o644)
-	if got := classify(dir, d); got != "text" {
+	if got := Classify(dir, d); got != "text" {
 		t.Fatalf("want text (sniffed), got %s", got)
 	}
 }
@@ -76,7 +76,7 @@ func TestClassifySniffTextNoExt(t *testing.T) {
 func TestClassifySniffBinaryNoExt(t *testing.T) {
 	dir := t.TempDir()
 	d := mkEntry(t, dir, "blob", []byte{0x00, 0x01, 0x02, 0xff}, 0o644)
-	if got := classify(dir, d); got != "unknown" {
+	if got := Classify(dir, d); got != "unknown" {
 		t.Fatalf("want unknown, got %s", got)
 	}
 }
@@ -90,11 +90,11 @@ func TestScanSortedDirsFirstCasefold(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "B.txt"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, ".hidden"), []byte("x"), 0o644)
 
-	items, err := scan(dir, false)
+	items, err := Scan(dir, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sortEntries(items, sortName)
+	SortEntries(items, SortName)
 	// casefold 排序："a.txt" < "B.txt"（大小写不敏感，Finder 风格）
 	want := []string{"A_dir", "b_dir", "a.txt", "B.txt"}
 	for i, w := range want {
@@ -115,7 +115,7 @@ func TestSortByTimeAndSize(t *testing.T) {
 		{Name: "stale.txt", IsDir: false, SizeN: 999, MTimeN: time.Unix(100, 0)},
 		{Name: "dir1", IsDir: true},
 	}
-	sortEntries(items, sortTime)
+	SortEntries(items, SortTime)
 	if !items[0].IsDir {
 		t.Fatal("dirs must come first")
 	}
@@ -123,7 +123,7 @@ func TestSortByTimeAndSize(t *testing.T) {
 	if items[1].Name != "recent.txt" || items[2].Name != "mid.txt" || items[3].Name != "stale.txt" {
 		t.Fatalf("time sort wrong: %+v", names(items))
 	}
-	sortEntries(items, sortSize)
+	SortEntries(items, SortSize)
 	// 大小大→小: stale(999) > mid(50) > recent(10)
 	if items[1].Name != "stale.txt" || items[2].Name != "mid.txt" || items[3].Name != "recent.txt" {
 		t.Fatalf("size sort wrong: %+v", names(items))
@@ -133,7 +133,7 @@ func TestSortByTimeAndSize(t *testing.T) {
 func TestScanShowHidden(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, ".hidden"), []byte("x"), 0o644)
-	items, _ := scan(dir, true)
+	items, _ := Scan(dir, true)
 	found := false
 	for _, e := range items {
 		if e.Name == ".hidden" {
@@ -146,7 +146,7 @@ func TestScanShowHidden(t *testing.T) {
 }
 
 func TestScanUnreadableDir(t *testing.T) {
-	_, err := scan("/nonexistent-path-xyz", false)
+	_, err := Scan("/nonexistent-path-xyz", false)
 	if err == nil {
 		t.Fatal("want error for nonexistent path")
 	}
@@ -160,8 +160,8 @@ func TestHumanSize(t *testing.T) {
 		{0, "0 B"}, {1023, "1023 B"}, {1024, "1.0 KB"}, {5 * 1024 * 1024, "5.0 MB"},
 	}
 	for _, c := range cases {
-		if got := humanSize(c.in); got != c.want {
-			t.Fatalf("humanSize(%d) = %s, want %s", c.in, got, c.want)
+		if got := HumanSize(c.in); got != c.want {
+			t.Fatalf("HumanSize(%d) = %s, want %s", c.in, got, c.want)
 		}
 	}
 }

@@ -119,6 +119,15 @@ Apple M1 Pro 实测（中位数，测试方法见 [PERF.md](PERF.md)）：
 go test ./...       # 单测
 ```
 
-代码结构：`main.go` 入口与参数解析，`app.go` 状态机与打开策略，`fs.go` 扫描 / 类型判定 / 排序，`render.go` 宽度感知渲染，`keys.go` 按键读取，`term_*.go` 终端层，`opener_*.go` 跨平台打开。
+代码结构：
+
+```
+main.go             入口与参数解析（package main）
+internal/fs/        扫描 / 类型判定 / 排序（名称·时间·大小）
+internal/render/    宽度感知渲染（纯函数，可单测）
+internal/core/      App 状态机 / 按键处理 / 打开策略
+internal/term/      终端层（cbreak：darwin/linux/windows 分平台）
+internal/opener/    跨平台打开（open / xdg-open / cmd start）
+```
 
 设计要点：UI 输出到 stderr，stdout 只输出结果路径（`ncd` 依赖此契约）；CJK / emoji 宽度感知截断。

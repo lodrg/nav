@@ -5,10 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"nav/internal/core"
 )
 
-// version 构建时注入：go build -ldflags "-X main.version=<tag>"（见 build.sh / workflow）
-var version = "dev"
+var version = "dev" // 构建时注入：go build -ldflags "-X main.version=<tag>"（见 build.sh / workflow）
 
 const usageTemplate = `nav %s — 内联弹出式目录导航器（Go 版，单二进制）
 
@@ -19,7 +20,7 @@ const usageTemplate = `nav %s — 内联弹出式目录导航器（Go 版，单�
   nav --once [路径]    打开一个文件后立即退出
   nav --open <文件>    按类型直接打开文件（文本→编辑器，可执行→终端，其他→默认应用）
 
-按键: ↑↓/jk 移动 · →/l/⏎ 打开 · ←/h 上级 · 空格 预览 · . 隐藏文件 · q/Esc 退出
+按键: ↑↓/jk 移动 · →/l/⏎ 打开 · ←/h 上级 · Tab 排序 · 空格 预览 · . 隐藏文件 · q/Esc 退出
 `
 
 func main() {
@@ -63,15 +64,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "nav: --open 需要文件路径（不是目录）")
 			os.Exit(2)
 		}
-		app := &App{cwd: filepath.Dir(abs), fd: fd}
-		if old, err := makeCbreak(fd); err == nil {
-			app.oldState = old
-			defer restoreTerm(fd, old)
-		} // 非 TTY（管道调用）时降级：不进入 cbreak，直接运行
-		if !app.openFile(abs) {
-			os.Exit(1)
-		}
-		return
+		os.Exit(core.OpenFileMode(filepath.Dir(abs), abs, fd))
 	}
 
 	// 非 TTY 守卫（交互模式）
@@ -84,7 +77,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	go keyReaderLoop()
-	app := &App{cwd: abs, printMode: printMode, once: once}
-	os.Exit(app.run(fd))
+	go core.KeyReaderLoop()
+	app := core.New(abs, printMode, once)
+	os.Exit(app.Run(fd))
 }

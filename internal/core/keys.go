@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"os"
@@ -7,9 +7,9 @@ import (
 
 var keyCh = make(chan byte, 32)
 
-// keyReaderLoop：单 goroutine 串行读 fd0（cbreak 模式），
+// KeyReaderLoop：单 goroutine 串行读 fd0（cbreak 模式），
 // 避免 bufio 并发读同一 fd 的问题。
-func keyReaderLoop() {
+func KeyReaderLoop() {
 	buf := make([]byte, 1)
 	for {
 		n, err := os.Stdin.Read(buf)
@@ -48,7 +48,7 @@ func readKey() string {
 	switch b {
 	case '\r', '\n':
 		return "enter"
-	case '	':
+	case '\t':
 		return "tab"
 	case 0x03:
 		return "ctrl-c" // ISIG 保留时不会出现；防御性处理
